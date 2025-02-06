@@ -46,13 +46,13 @@ async def store_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await store_chat_id(update, context)
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕ Add to Group", url=f"https://t.me/{context.bot.username}?startgroup=true")],
-        [InlineKeyboardButton("📚 Help", callback_data="help_menu")],
+        [InlineKeyboardButton("➕ Add me in your Group", url=f"https://t.me/{context.bot.username}?startgroup=true")],
+        [InlineKeyboardButton("❓ Help and Commands", callback_data="help_menu")],
         [
-            InlineKeyboardButton("👑 Owner", url="https://t.me/YourUsername"),
-            InlineKeyboardButton("💬 Support", url="https://t.me/YourSupportGroup")
+            InlineKeyboardButton("👤Owner", url="https://t.me/Itz_Marv1n"),
+            InlineKeyboardButton("💬 Support", url="https://t.me/Anime_Group_chat_en")
         ],
-        [InlineKeyboardButton("🔔 Channel", url="https://t.me/YourChannel")]
+        [InlineKeyboardButton("📢 Channel", url="https://t.me/Samurais_network")]
     ])
     
     await update.message.reply_text(
@@ -80,7 +80,7 @@ async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "1. Add me to your group\n"
         "2. Make me admin\n"
         "3. I'll auto-delete edited messages!\n\n"
-        "🌸 Made with love by @YourUsername"
+        "🌸 Made with love by @Samurais_Network"
     )
     await query.edit_message_text(
         text=help_text,
