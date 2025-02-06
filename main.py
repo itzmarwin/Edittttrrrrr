@@ -13,30 +13,16 @@ import pymongo
 
 # MongoDB Setup
 MONGODB_URI = os.environ.get("MONGODB_URI")
-LOGGER_GROUP = int(os.environ.get("LOGGER_GROUP")) 
-START_IMAGE_URL = os.environ.get("START_IMAGE_URL")
+LOGGER_GROUP = int(os.environ.get("LOGGER_GROUP"))  # अपना Logger Group ID डालें
+START_IMAGE_URL = os.environ.get("START_IMAGE_URL")  # Image URL (जैसे: https://telegra.ph/file/...jpg)
 
 client = pymongo.MongoClient(MONGODB_URI)
 db = client["EmikoBotDB"]
 afk_collection = db["afk"]
 chats_collection = db["chats"]
 
-# ------------------- Delete Edited Messages -------------------
-async def delete_edited(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.edited_message.chat.type in ["group", "supergroup"]:
-        try:
-            user = update.edited_message.from_user
-            await update.edited_message.delete()
-            await context.bot.send_message(
-                chat_id=update.edited_message.chat_id,
-                text=f"🌸 **Dear {user.first_name},**\nYour edited message was deleted to keep our chat clean! ✨",
-                parse_mode="Markdown"
-            )
-        except Exception as e:
-            print(f"Delete Error: {e}")
-
 # ------------------- Logger Function -------------------
-async def log_event(event_type: str, update: Update):
+async def log_event(event_type: str, update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
         chat = update.effective_chat
@@ -46,15 +32,17 @@ async def log_event(event_type: str, update: Update):
 🌸 **New User Started Bot** 🌸
 ┌ 👤 User: [{user.first_name}](tg://user?id={user.id})
 ├ 🆔 ID: `{user.id}`
-└ 📅 Date: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"""
-
+└ 📅 Date: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+            """
+        
         elif event_type == "group_add":
             log_text = f"""
 👥 **Bot Added to Group** 👥
 ┌ 📛 Group: {chat.title}
 ├ 🆔 ID: `{chat.id}`
 ├ 👤 Added By: [{user.first_name}](tg://user?id={user.id})
-└ 📅 Date: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"""
+└ 📅 Date: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+            """
 
         await context.bot.send_message(
             chat_id=LOGGER_GROUP,
@@ -72,14 +60,15 @@ async def store_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chats_collection.insert_one({"chat_id": chat.id, "type": chat_type})
         
         if chat_type == "group":
-            await log_event("group_add", update)
+            await log_event("group_add", update, context)
 
 # ------------------- Start Command with Image -------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await store_chat_id(update, context)
     
+    # Private Start Log
     if update.message.chat.type == "private":
-        await log_event("private_start", update)
+        await log_event("private_start", update, context)
 
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Add me in your Group", url=f"https://t.me/{context.bot.username}?startgroup=true")],
@@ -107,10 +96,11 @@ Use buttons below to explore my features~""",
         parse_mode="Markdown"
     )
 
-# ------------------- Help Menu -------------------
+# ------------------- Help Menu (Fixed) -------------------
 async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    
     help_text = """
 🎀 *Emiko Edit Help Menu* 🎀
 
@@ -126,11 +116,29 @@ async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 🌸 Made with love by [Samurais Network](https://t.me/Samurais_network)
     """
-    await query.edit_message_text(
-        text=help_text.strip(),
-        parse_mode="Markdown",
-        disable_web_page_preview=True
-    )
+    
+    try:
+        # Edit the original message's caption
+        await query.edit_message_caption(
+            caption=help_text.strip(),
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Back", callback_data="start_menu")]
+            ])
+        )
+    except Exception as e:
+        print(f"Help Menu Error: {e}")
+        await query.message.reply_text(
+            text=help_text.strip(),
+            parse_mode="Markdown",
+            disable_web_page_preview=True
+        )
+
+# ------------------- Back to Start Menu -------------------
+async def start_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    await start(update, context)  # Reuse the start function
 
 # ------------------- Broadcast -------------------
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -222,6 +230,7 @@ def main():
     app.add_handler(CommandHandler("afk", set_afk))
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CallbackQueryHandler(help_button, pattern="^help_menu$"))
+    app.add_handler(CallbackQueryHandler(start_menu, pattern="^start_menu$"))
     app.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE & filters.ChatType.GROUPS, delete_edited))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, handle_afk_return))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, afk_mention))
