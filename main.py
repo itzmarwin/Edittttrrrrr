@@ -13,15 +13,31 @@ import pymongo
 
 # MongoDB Setup
 MONGODB_URI = os.environ.get("MONGODB_URI")
-LOGGER_GROUP = int(os.environ.get("LOGGER_GROUP"))  # अपना Logger Group ID डालें
-START_IMAGE_URL = os.environ.get("START_IMAGE_URL")  # Image URL (जैसे: https://telegra.ph/file/...jpg)
+LOGGER_GROUP = int(os.environ.get("LOGGER_GROUP"))
+START_IMAGE_URL = os.environ.get("START_IMAGE_URL")
 
 client = pymongo.MongoClient(MONGODB_URI)
 db = client["EmikoBotDB"]
 afk_collection = db["afk"]
 chats_collection = db["chats"]
 
-# ------------------- Logger Function -------------------
+# ==================== CORE FUNCTIONS ====================
+
+# Function 1: Delete Edited Messages
+async def delete_edited(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.edited_message.chat.type in ["group", "supergroup"]:
+        try:
+            user = update.edited_message.from_user
+            await update.edited_message.delete()
+            await context.bot.send_message(
+                chat_id=update.edited_message.chat_id,
+                text=f"🌸 **Dear {user.first_name},**\nYour edited message was deleted to keep our chat clean! ✨",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            print(f"Delete Error: {e}")
+
+# Function 2: Log Events
 async def log_event(event_type: str, update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
@@ -52,7 +68,7 @@ async def log_event(event_type: str, update: Update, context: ContextTypes.DEFAU
     except Exception as e:
         print(f"Logger Error: {e}")
 
-# ------------------- Store Chat IDs -------------------
+# Function 3: Store Chat IDs
 async def store_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     if not chats_collection.find_one({"chat_id": chat.id}):
@@ -62,11 +78,12 @@ async def store_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if chat_type == "group":
             await log_event("group_add", update, context)
 
-# ------------------- Start Command with Image -------------------
+# ==================== COMMANDS ====================
+
+# Command 1: Start with Image
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await store_chat_id(update, context)
     
-    # Private Start Log
     if update.message.chat.type == "private":
         await log_event("private_start", update, context)
 
@@ -83,20 +100,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_photo(
         chat_id=update.effective_chat.id,
         photo=START_IMAGE_URL,
-        caption="""
-🌸 **Welcome to Emiko Edit!** 🌸
-
-I'm your cute anime-style assistant to manage groups!
-★ Edit Message Cleaner ✨
-★ AFK System ⏰
-★ Broadcast Tools 📢
-
-Use buttons below to explore my features~""",
+        caption="🌸 **Welcome to Emiko Edit!** 🌸\n\nI'm your cute anime-style assistant to manage groups!\n★ Edit Message Cleaner ✨\n★ AFK System ⏰\n★ Broadcast Tools 📢\n\nUse buttons below to explore my features~",
         reply_markup=keyboard,
         parse_mode="Markdown"
     )
 
-# ------------------- Help Menu (Fixed) -------------------
+# Command 2: Help Menu
 async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -118,7 +127,6 @@ async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     
     try:
-        # Edit the original message's caption
         await query.edit_message_caption(
             caption=help_text.strip(),
             parse_mode="Markdown",
@@ -127,20 +135,16 @@ async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ])
         )
     except Exception as e:
-        print(f"Help Menu Error: {e}")
-        await query.message.reply_text(
-            text=help_text.strip(),
-            parse_mode="Markdown",
-            disable_web_page_preview=True
-        )
+        print(f"Help Error: {e}")
+        await query.message.reply_text(help_text.strip(), parse_mode="Markdown")
 
-# ------------------- Back to Start Menu -------------------
+# Command 3: Back to Start
 async def start_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    await start(update, context)  # Reuse the start function
+    await start(update, context)
 
-# ------------------- Broadcast -------------------
+# Command 4: Broadcast
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != int(os.environ.get("ADMIN_ID")):
@@ -160,11 +164,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     for chat in all_chats:
         try:
-            await context.bot.send_message(
-                chat_id=chat["chat_id"],
-                text=message,
-                parse_mode="Markdown"
-            )
+            await context.bot.send_message(chat["chat_id"], message, parse_mode="Markdown")
             if chat["type"] == "private":
                 user_count += 1
             else:
@@ -178,7 +178,8 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-# ------------------- AFK System -------------------
+# ==================== AFK SYSTEM ====================
+
 async def set_afk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.chat.type in ["group", "supergroup"]:
         user = update.effective_user
@@ -221,7 +222,8 @@ async def afk_mention(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         parse_mode="Markdown"
                     )
 
-# ------------------- Main Function -------------------
+# ==================== MAIN ====================
+
 def main():
     app = Application.builder().token(os.environ.get("TOKEN")).build()
     
