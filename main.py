@@ -93,13 +93,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📢 Channel", url="https://t.me/Samurais_network")]
     ])
     
-    await context.bot.send_photo(
-        chat_id=update.effective_chat.id,
-        photo=START_IMAGE_URL,
-        caption="🌸 **Welcome to Emiko Edit!** 🌸\n\nI'm your cute anime-style assistant to manage groups!\n★ Edit Message Cleaner ✨\n★ AFK System ⏰\n★ Broadcast Tools 📢\n\nUse buttons below to explore my features~",
-        reply_markup=keyboard,
-        parse_mode="Markdown"
-    )
+   await context.bot.send_photo(
+    chat_id=update.effective_chat.id,
+    photo=START_IMAGE_URL,
+    caption="**🌸 Hᴀɪɪ~ I'ᴍ Eᴍɪᴋᴏ! 🌸**\n\n"
+            "I'ᴍ ʜᴇʀᴇ ᴛᴏ ᴋᴇᴇᴘ ʏᴏᴜʀ ɢʀᴏᴜᴘ ɴᴇᴀᴛ & ғᴜɴ! (≧▽≦)\n\n"
+            "╰☆✿  I ᴅᴇʟᴇᴛᴇ ᴇᴅɪᴛᴇᴅ ᴍᴇssᴀɢᴇs~ ✨\n\n"
+            "╰☆✿  Lᴇᴛ ᴇᴠᴇʀʏᴏɴᴇ ᴋɴᴏᴡ ᴡʜᴇɴ ʏᴏᴜ'ʀᴇ Aғᴋ~ ⏰\n\n"
+            "╰☆✿  Bʀᴏᴀᴅᴄᴀsᴛ ᴍᴇssᴀɢᴇs ᴇᴀsɪʟʏ~ 📢\n\n"
+            "Uѕᴇ ᴛʜᴇ ʙᴜᴛᴛᴏɴs ʙᴇʟᴏᴡ ᴛᴏ ᴇxᴘʟᴏʀᴇ ᴍᴇ~! (✿◕‿◕)♡",
+    reply_markup=keyboard,
+    parse_mode="Markdown"
+   )
 
 async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
