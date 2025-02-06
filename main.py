@@ -18,7 +18,7 @@ db = client["EmikoBotDB"]
 afk_collection = db["afk"]
 chats_collection = db["chats"]
 
-# ------------------- Delete Edited Messages with Cute Alert -------------------
+# ------------------- Delete Edited Messages -------------------
 async def delete_edited(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.edited_message.chat.type in ["group", "supergroup"]:
         try:
@@ -42,7 +42,7 @@ async def store_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "type": chat_type
         })
 
-# ------------------- Start Command with Beautiful Menu -------------------
+# ------------------- Start Command -------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await store_chat_id(update, context)
     keyboard = InlineKeyboardMarkup([
@@ -66,11 +66,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-# ------------------- Help Command Handler -------------------
+# ------------------- Help Menu -------------------
 async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
     help_text = (
         "🎀 **Emiko Edit Help Menu** 🎀\n\n"
         "✨ **Features:**\n"
@@ -83,13 +82,12 @@ async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "3. I'll auto-delete edited messages!\n\n"
         "🌸 Made with love by @YourUsername"
     )
-    
     await query.edit_message_text(
         text=help_text,
         parse_mode="Markdown"
     )
 
-# ------------------- Broadcast Feature (Users + Groups) -------------------
+# ------------------- Broadcast -------------------
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != int(os.environ.get("ADMIN_ID")):
@@ -123,16 +121,52 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             failed += 1
     
     await update.message.reply_text(
-        f"✅ **Broadcast Report:**\n"
-        f"👤 Users: {user_count}\n"
-        f"👥 Groups: {group_count}\n"
-        f"❌ Failed: {failed}",
+        f"✅ **Broadcast Report:**\n👤 Users: {user_count}\n👥 Groups: {group_count}\n❌ Failed: {failed}",
         parse_mode="Markdown"
     )
 
-# ------------------- AFK Feature (Keep as is) -------------------
+# ------------------- AFK System -------------------
 async def set_afk(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # ... [Previous AFK Code Without Changes] ...
+    if update.message.chat.type in ["group", "supergroup"]:
+        user = update.effective_user
+        now = datetime.now()
+        afk_collection.update_one(
+            {"user_id": user.id},
+            {"$set": {"afk": True, "time": now}},
+            upsert=True
+        )
+        await update.message.reply_text(f"⏸️ **{user.first_name} ɪs ɴᴏᴡ ᴀғᴋ!**", parse_mode="Markdown")
+
+async def handle_afk_return(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.chat.type in ["group", "supergroup"]:
+        user = update.effective_user
+        afk_data = afk_collection.find_one({"user_id": user.id})
+        if afk_data:
+            afk_time = afk_data["time"]
+            now = datetime.now()
+            delta = now - afk_time
+            seconds = delta.total_seconds()
+            afk_collection.delete_one({"user_id": user.id})
+            await update.message.reply_text(
+                f"🎉 **{user.first_name} ɪs ʙᴀᴄᴋ ᴏɴʟɪɴᴇ!**\n⏱️ ᴀᴡᴀʏ ғᴏʀ `{int(seconds)}s`",
+                parse_mode="Markdown"
+            )
+
+async def afk_mention(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.chat.type in ["group", "supergroup"] and update.message.entities:
+        for entity in update.message.entities:
+            if entity.type in ["mention", "text_mention"]:
+                mentioned_user = entity.user
+                afk_data = afk_collection.find_one({"user_id": mentioned_user.id})
+                if afk_data:
+                    afk_time = afk_data["time"]
+                    now = datetime.now()
+                    delta = now - afk_time
+                    seconds = delta.total_seconds()
+                    await update.message.reply_text(
+                        f"⚠️ **{mentioned_user.first_name} ɪs ᴀғᴋ!**\n⏰ ᴀᴡᴀʏ sɪɴᴄᴇ `{int(seconds)}s`",
+                        parse_mode="Markdown"
+                    )
 
 # ------------------- Main Function -------------------
 def main():
@@ -144,9 +178,11 @@ def main():
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CallbackQueryHandler(help_button, pattern="^help_menu$"))
     app.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE & filters.ChatType.GROUPS, delete_edited))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, handle_afk_return))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, afk_mention))
     app.add_handler(MessageHandler(filters.ALL, store_chat_id))
     
-    # Webhook Setup
+    # Webhook
     PORT = int(os.environ.get("PORT", 10000))
     app.run_webhook(
         listen="0.0.0.0",
