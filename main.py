@@ -1,41 +1,31 @@
 from telegram import Update
 from telegram.ext import (
-    Updater,
+    Application,
     CommandHandler,
     MessageHandler,
-    filters,
-    CallbackContext,
-    Application
+    ContextTypes,
+    filters
 )
 import os
 
-TOKEN = os.environ.get("TOKEN")  # Render पर Environment Variable से लेगा
+TOKEN = os.environ.get("TOKEN")
 
 # Start Command
-async def start(update: Update, context: CallbackContext):
-    await update.message.reply_text("Hi! I'm your bot. Use /afk to set AFK.")
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Bot Started! Use /afk to set AFK.")
 
 # Delete Edited Messages
-async def delete_edited(update: Update, context: CallbackContext):
+async def delete_edited(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         await update.edited_message.delete()
     except Exception as e:
-        print(f"Error deleting message: {e}")
+        print(f"Error: {e}")
 
-# AFK Feature (Basic)
-async def set_afk(update: Update, context: CallbackContext):
+# AFK Command
+async def set_afk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     context.user_data['afk'] = True
-    await update.message.reply_text(f"{user.first_name} is now AFK.")
-
-# Broadcast Feature (Admin Only)
-async def broadcast(update: Update, context: CallbackContext):
-    user = update.effective_user
-    if user.id != ADMIN_ID:  # Replace ADMIN_ID with your Telegram ID
-        return
-    message = " ".join(context.args)
-    # Send message to all groups (इसे अपने हिसाब से customize करें)
-    # ...
+    await update.message.reply_text(f"{user.first_name} is AFK now!")
 
 def main():
     app = Application.builder().token(TOKEN).build()
@@ -43,10 +33,11 @@ def main():
     # Handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("afk", set_afk))
-    app.add_handler(CommandHandler("broadcast", broadcast))
-    app.add_handler(MessageHandler(filters.EDITED_MESSAGE, delete_edited))
     
-    # Render पर Webhook के बजाय Polling use करें (Render की Limitations के कारण)
+    # EDITED_MESSAGE को सही filter के साथ
+    app.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE, delete_edited))
+    
+    # Render पर Polling चलाएं
     app.run_polling()
 
 if __name__ == "__main__":
