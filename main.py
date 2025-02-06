@@ -17,7 +17,14 @@ db = client["DevilBotDB"]
 afk_collection = db["afk"]
 chats_collection = db["chats"]
 
-# ------------------- Store Chat IDs (Groups & Users) -------------------
+# ------------------- Delete Edited Messages -------------------
+async def delete_edited(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await update.edited_message.delete()
+    except Exception as e:
+        print(f"Delete Error: {e}")
+
+# ------------------- Store Chat IDs -------------------
 async def store_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     if not chats_collection.find_one({"chat_id": chat_id}):
@@ -71,7 +78,7 @@ async def afk_mention(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         parse_mode="Markdown"
                     )
 
-# ------------------- Broadcast (Admin Only) -------------------
+# ------------------- Broadcast -------------------
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != int(os.environ.get("ADMIN_ID")):
@@ -113,14 +120,12 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("afk", set_afk))
     app.add_handler(CommandHandler("broadcast", broadcast))
-    app.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE, delete_edited))
+    app.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE, delete_edited))  # Fixed
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_afk_return))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, afk_mention))
-    
-    # Store Chat IDs when bot is added to a group or starts a private chat
     app.add_handler(MessageHandler(filters.ALL, store_chat_id))
     
-    # Webhook for Render
+    # Webhook Setup
     PORT = int(os.environ.get("PORT", 10000))
     app.run_webhook(
         listen="0.0.0.0",
