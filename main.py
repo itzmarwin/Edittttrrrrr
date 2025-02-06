@@ -70,22 +70,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    help_text = (
-        "🎀 **Emiko Edit Help Menu** 🎀\n\n"
-        "✨ **Features:**\n"
-        "➤ `/afk` - Set AFK status\n"
-        "➤ `/broadcast` - Send message to all users (Admin)\n"
-        "➤ Auto-deletes edited messages\n\n"
-        "⚙️ **How to Use:**\n"
-        "1. Add me to your group\n"
-        "2. Make me admin\n"
-        "3. I'll auto-delete edited messages!\n\n"
-        "🌸 Made with love by @Samurais_Network"
-    )
-    await query.edit_message_text(
-        text=help_text,
-        parse_mode="Markdown"
-    )
+    try:
+        help_text = (
+            "🎀 *Emiko Edit Help Menu* 🎀\n\n"
+            "✨ *Features:*\n"
+            "• `/afk` - Set AFK status\n"
+            "• `/broadcast` - Send message to all users (Admin)\n"
+            "• Auto-deletes edited messages\n\n"
+            "⚙️ *How to Use:*\n"
+            "1. Add me to your group\n"
+            "2. Make me admin\n"
+            "3. I'll auto-delete edited messages!\n\n"
+            "🌸 Made with love by [Samurais Network](https://t.me/Samurais_Network)"
+        )
+        await query.edit_message_text(
+            text=help_text,
+            parse_mode="Markdown",
+            disable_web_page_preview=True
+        )
+    except Exception as e:
+        print(f"Help Menu Error: {e}")
+        await query.edit_message_text(text="❌ Error loading help menu.")
 
 # ------------------- Broadcast -------------------
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
