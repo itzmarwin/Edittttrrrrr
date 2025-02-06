@@ -61,8 +61,8 @@ def main():
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        webhook_url="https://YOUR-RENDER-SERVICE-NAME.onrender.com",  # अपना URL डालें
-        secret_token="RENDER_BOT_SECRET"  # कोई भी secret token
+        webhook_url="https://edittttrrrrr.onrender.com",  # अपना URL डालें
+        secret_token="12345SECRET"  # कोई भी secret token
     )
 
 if __name__ == "__main__":
