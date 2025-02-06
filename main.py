@@ -13,13 +13,27 @@ import pymongo
 
 # MongoDB Setup
 MONGODB_URI = os.environ.get("MONGODB_URI")
-LOGGER_GROUP = int(os.environ.get("LOGGER_GROUP"))  # अपना Logger Group ID डालें
-START_IMAGE_URL = os.environ.get("START_IMAGE_URL")  # Image URL (जैसे: https://telegra.ph/file/...jpg)
+LOGGER_GROUP = int(os.environ.get("LOGGER_GROUP")) 
+START_IMAGE_URL = os.environ.get("START_IMAGE_URL")
 
 client = pymongo.MongoClient(MONGODB_URI)
 db = client["EmikoBotDB"]
 afk_collection = db["afk"]
 chats_collection = db["chats"]
+
+# ------------------- Delete Edited Messages -------------------
+async def delete_edited(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.edited_message.chat.type in ["group", "supergroup"]:
+        try:
+            user = update.edited_message.from_user
+            await update.edited_message.delete()
+            await context.bot.send_message(
+                chat_id=update.edited_message.chat_id,
+                text=f"🌸 **Dear {user.first_name},**\nYour edited message was deleted to keep our chat clean! ✨",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            print(f"Delete Error: {e}")
 
 # ------------------- Logger Function -------------------
 async def log_event(event_type: str, update: Update):
@@ -32,18 +46,15 @@ async def log_event(event_type: str, update: Update):
 🌸 **New User Started Bot** 🌸
 ┌ 👤 User: [{user.first_name}](tg://user?id={user.id})
 ├ 🆔 ID: `{user.id}`
-└ 📅 Date: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
-            """
-        
+└ 📅 Date: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"""
+
         elif event_type == "group_add":
-            adder = await chat.get_member(user.id)
             log_text = f"""
 👥 **Bot Added to Group** 👥
 ┌ 📛 Group: {chat.title}
 ├ 🆔 ID: `{chat.id}`
 ├ 👤 Added By: [{user.first_name}](tg://user?id={user.id})
-└ 📅 Date: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
-            """
+└ 📅 Date: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"""
 
         await context.bot.send_message(
             chat_id=LOGGER_GROUP,
@@ -53,7 +64,7 @@ async def log_event(event_type: str, update: Update):
     except Exception as e:
         print(f"Logger Error: {e}")
 
-# ------------------- Store Chat IDs with Logging -------------------
+# ------------------- Store Chat IDs -------------------
 async def store_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     if not chats_collection.find_one({"chat_id": chat.id}):
@@ -67,7 +78,6 @@ async def store_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await store_chat_id(update, context)
     
-    # Private Start Log
     if update.message.chat.type == "private":
         await log_event("private_start", update)
 
@@ -75,13 +85,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("➕ Add me in your Group", url=f"https://t.me/{context.bot.username}?startgroup=true")],
         [InlineKeyboardButton("❓ Help and Commands", callback_data="help_menu")],
         [
-            InlineKeyboardButton("👤Owner", url="https://t.me/Itz_Marv1n"),
+            InlineKeyboardButton("👤 Owner", url="https://t.me/Itz_Marv1n"),
             InlineKeyboardButton("💬 Support", url="https://t.me/Anime_Group_chat_en")
         ],
         [InlineKeyboardButton("📢 Channel", url="https://t.me/Samurais_network")]
     ])
     
-    # Send Image with Caption
     await context.bot.send_photo(
         chat_id=update.effective_chat.id,
         photo=START_IMAGE_URL,
@@ -206,7 +215,6 @@ async def afk_mention(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ------------------- Main Function -------------------
 def main():
-    global context
     app = Application.builder().token(os.environ.get("TOKEN")).build()
     
     # Handlers
