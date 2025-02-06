@@ -13,38 +13,64 @@ import pymongo
 
 # MongoDB Setup
 MONGODB_URI = os.environ.get("MONGODB_URI")
+LOGGER_GROUP = int(os.environ.get("LOGGER_GROUP"))  # अपना Logger Group ID डालें
+START_IMAGE_URL = os.environ.get("START_IMAGE_URL")  # Image URL (जैसे: https://telegra.ph/file/...jpg)
+
 client = pymongo.MongoClient(MONGODB_URI)
 db = client["EmikoBotDB"]
 afk_collection = db["afk"]
 chats_collection = db["chats"]
 
-# ------------------- Delete Edited Messages -------------------
-async def delete_edited(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.edited_message.chat.type in ["group", "supergroup"]:
-        try:
-            user = update.edited_message.from_user
-            await update.edited_message.delete()
-            await context.bot.send_message(
-                chat_id=update.edited_message.chat_id,
-                text=f"🌸 **Dear {user.first_name},**\nYour edited message was deleted to keep our chat clean! ✨",
-                parse_mode="Markdown"
-            )
-        except Exception as e:
-            print(f"Delete Error: {e}")
+# ------------------- Logger Function -------------------
+async def log_event(event_type: str, update: Update):
+    try:
+        user = update.effective_user
+        chat = update.effective_chat
+        
+        if event_type == "private_start":
+            log_text = f"""
+🌸 **New User Started Bot** 🌸
+┌ 👤 User: [{user.first_name}](tg://user?id={user.id})
+├ 🆔 ID: `{user.id}`
+└ 📅 Date: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+            """
+        
+        elif event_type == "group_add":
+            adder = await chat.get_member(user.id)
+            log_text = f"""
+👥 **Bot Added to Group** 👥
+┌ 📛 Group: {chat.title}
+├ 🆔 ID: `{chat.id}`
+├ 👤 Added By: [{user.first_name}](tg://user?id={user.id})
+└ 📅 Date: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+            """
 
-# ------------------- Store Chat IDs -------------------
+        await context.bot.send_message(
+            chat_id=LOGGER_GROUP,
+            text=log_text.strip(),
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        print(f"Logger Error: {e}")
+
+# ------------------- Store Chat IDs with Logging -------------------
 async def store_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     if not chats_collection.find_one({"chat_id": chat.id}):
         chat_type = "group" if chat.type in ["group", "supergroup"] else "private"
-        chats_collection.insert_one({
-            "chat_id": chat.id,
-            "type": chat_type
-        })
+        chats_collection.insert_one({"chat_id": chat.id, "type": chat_type})
+        
+        if chat_type == "group":
+            await log_event("group_add", update)
 
-# ------------------- Start Command -------------------
+# ------------------- Start Command with Image -------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await store_chat_id(update, context)
+    
+    # Private Start Log
+    if update.message.chat.type == "private":
+        await log_event("private_start", update)
+
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Add me in your Group", url=f"https://t.me/{context.bot.username}?startgroup=true")],
         [InlineKeyboardButton("❓ Help and Commands", callback_data="help_menu")],
@@ -55,13 +81,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📢 Channel", url="https://t.me/Samurais_network")]
     ])
     
-    await update.message.reply_text(
-        "🌸 **Welcome to Emiko Edit!** 🌸\n\n"
-        "I'm your cute anime-style assistant to manage groups!\n"
-        "★ Edit Message Cleaner ✨\n"
-        "★ AFK System ⏰\n"
-        "★ Broadcast Tools 📢\n\n"
-        "Use buttons below to explore my features~",
+    # Send Image with Caption
+    await context.bot.send_photo(
+        chat_id=update.effective_chat.id,
+        photo=START_IMAGE_URL,
+        caption="""
+🌸 **Welcome to Emiko Edit!** 🌸
+
+I'm your cute anime-style assistant to manage groups!
+★ Edit Message Cleaner ✨
+★ AFK System ⏰
+★ Broadcast Tools 📢
+
+Use buttons below to explore my features~""",
         reply_markup=keyboard,
         parse_mode="Markdown"
     )
@@ -70,27 +102,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    try:
-        help_text = (
-            "🎀 *Emiko Edit Help Menu* 🎀\n\n"
-            "✨ *Features:*\n"
-            "• `/afk` - Set AFK status\n"
-            "• `/broadcast` - Send message to all users (Admin)\n"
-            "• Auto-deletes edited messages\n\n"
-            "⚙️ *How to Use:*\n"
-            "1. Add me to your group\n"
-            "2. Make me admin\n"
-            "3. I'll auto-delete edited messages!\n\n"
-            "🌸 Made with love by [Samurais Network](https://t.me/Samurais_Network)"
-        )
-        await query.edit_message_text(
-            text=help_text,
-            parse_mode="Markdown",
-            disable_web_page_preview=True
-        )
-    except Exception as e:
-        print(f"Help Menu Error: {e}")
-        await query.edit_message_text(text="❌ Error loading help menu.")
+    help_text = """
+🎀 *Emiko Edit Help Menu* 🎀
+
+✨ *Features:*
+• `/afk` - Set AFK status
+• `/broadcast` - Send message to all users (Admin)
+• Auto-deletes edited messages
+
+⚙️ *How to Use:*
+1. Add me to your group
+2. Make me admin
+3. I'll auto-delete edited messages!
+
+🌸 Made with love by [Samurais Network](https://t.me/Samurais_network)
+    """
+    await query.edit_message_text(
+        text=help_text.strip(),
+        parse_mode="Markdown",
+        disable_web_page_preview=True
+    )
 
 # ------------------- Broadcast -------------------
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -175,6 +206,7 @@ async def afk_mention(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ------------------- Main Function -------------------
 def main():
+    global context
     app = Application.builder().token(os.environ.get("TOKEN")).build()
     
     # Handlers
