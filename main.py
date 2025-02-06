@@ -1,4 +1,4 @@
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -23,7 +23,6 @@ chats_collection = db["chats"]
 
 # ==================== CORE FUNCTIONS ====================
 
-# Function 1: Delete Edited Messages
 async def delete_edited(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.edited_message.chat.type in ["group", "supergroup"]:
         try:
@@ -37,7 +36,6 @@ async def delete_edited(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             print(f"Delete Error: {e}")
 
-# Function 2: Log Events
 async def log_event(event_type: str, update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
@@ -68,7 +66,6 @@ async def log_event(event_type: str, update: Update, context: ContextTypes.DEFAU
     except Exception as e:
         print(f"Logger Error: {e}")
 
-# Function 3: Store Chat IDs
 async def store_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     if not chats_collection.find_one({"chat_id": chat.id}):
@@ -80,7 +77,6 @@ async def store_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ==================== COMMANDS ====================
 
-# Command 1: Start with Image
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await store_chat_id(update, context)
     
@@ -105,7 +101,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-# Command 2: Help Menu
 async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -136,15 +131,33 @@ async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     except Exception as e:
         print(f"Help Error: {e}")
-        await query.message.reply_text(help_text.strip(), parse_mode="Markdown")
 
-# Command 3: Back to Start
 async def start_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    await start(update, context)
+    
+    try:
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("➕ Add me in your Group", url=f"https://t.me/{context.bot.username}?startgroup=true")],
+            [InlineKeyboardButton("❓ Help and commands", callback_data="help_menu")],
+            [
+                InlineKeyboardButton("👤 Owner", url="https://t.me/Itz_Marv1n"),
+                InlineKeyboardButton("💬 Support", url="https://t.me/Anime_Group_chat_en")
+            ],
+            [InlineKeyboardButton("📢 Channel", url="https://t.me/Samurais_network")]
+        ])
+        
+        await query.edit_message_media(
+            media=InputMediaPhoto(
+                media=START_IMAGE_URL,
+                caption="🌸 **Welcome to Emiko Edit!** 🌸\n\nI'm your cute anime-style assistant to manage groups!\n★ Edit Message Cleaner ✨\n★ AFK System ⏰\n★ Broadcast Tools 📢\n\nUse buttons below to explore my features~",
+                parse_mode="Markdown"
+            ),
+            reply_markup=keyboard
+        )
+    except Exception as e:
+        print(f"Back Button Error: {e}")
 
-# Command 4: Broadcast
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != int(os.environ.get("ADMIN_ID")):
