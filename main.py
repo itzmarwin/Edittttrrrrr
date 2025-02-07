@@ -215,7 +215,7 @@ async def handle_afk_return(update: Update, context: ContextTypes.DEFAULT_TYPE):
             seconds = delta.total_seconds()
             afk_collection.delete_one({"user_id": user.id})
             await update.message.reply_text(
-                f"🎉 **{user.first_name} ɪs ʙᴀᴄᴋ ᴏɴʟɪɴᴇ!**\n⏱️ ᴀᴡᴀʏ ғᴏʀ `{int(seconds)}s`",
+                f"🎉 Yay~ {user.first_name} is back! (≧ω≦)✨\n⏱️ Gone for {int(seconds)}s~`",
                 parse_mode="Markdown"
             )
 
