@@ -30,7 +30,7 @@ async def delete_edited(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.edited_message.delete()
             await context.bot.send_message(
                 chat_id=update.edited_message.chat_id,
-                text=f"🌸 **Dear {user.first_name},**\nYour edited message was deleted to keep our chat clean! ✨",
+                text=f"🌸 Nyaa~ {user.first_name}! (≧ω≦)\nNo sneaky edits~ Stay tidy! ✨💕",
                 parse_mode="Markdown"
             )
         except Exception as e:
