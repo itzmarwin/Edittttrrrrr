@@ -202,7 +202,7 @@ async def set_afk(update: Update, context: ContextTypes.DEFAULT_TYPE):
             {"$set": {"afk": True, "time": now}},
             upsert=True
         )
-        await update.message.reply_text(f"⏸️ **{user.first_name} ɪs ɴᴏᴡ ᴀғᴋ!**", parse_mode="Markdown")
+        await update.message.reply_text(f"🌙 Nyaa~ {user.first_name} is AFK! (｡•́︿•̀｡) Hurry back~💕", parse_mode="Markdown")
 
 async def handle_afk_return(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.chat.type in ["group", "supergroup"]:
