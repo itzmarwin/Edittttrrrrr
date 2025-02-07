@@ -75,7 +75,8 @@ async def store_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if chat_type == "group":
             await log_event("group_add", update, context)
 
-# ------------------- Start Command -------------------
+# ==================== COMMANDS ====================
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await store_chat_id(update, context)
     
@@ -95,21 +96,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_photo(
         chat_id=update.effective_chat.id,
         photo=START_IMAGE_URL,
-        caption="""
-🌸 Hᴀɪɪ~ I'ᴍ Eᴍɪᴋᴏ! 🌸  
-
-I'ᴍ ʜᴇʀᴇ ᴛᴏ ᴋᴇᴇᴘ ʏᴏᴜʀ ɢʀᴏᴜᴘ ɴᴇᴀᴛ & ғᴜɴ! (≧▽≦)  
-╰☆✿  I ᴅᴇʟᴇᴛᴇ ᴇᴅɪᴛᴇᴅ ᴍᴇssᴀɢᴇs~ ✨  
-╰☆✿  Lᴇᴛ ᴇᴠᴇʀʏᴏɴᴇ ᴋɴᴏᴡ ᴡʜᴇɴ ʏᴏᴜ'ʀᴇ Aғᴋ~ ⏰  
-╰☆✿  Bʀᴏᴀᴅᴄᴀsᴛ ᴍᴇssᴀɢᴇs ᴇᴀsɪʟʏ~ 📢  
-
-Uѕᴇ ᴛʜᴇ ʙᴜᴛᴛᴏɴs ʙᴇʟᴏᴡ ᴛᴏ ᴇxᴘʟᴏʀᴇ ᴍᴇ~! (✿◕‿◕)♡
-        """,
+        caption="🌸 **Welcome to Emiko Edit!** 🌸\n\nI'm your cute anime-style assistant to manage groups!\n★ Edit Message Cleaner ✨\n★ AFK System ⏰\n★ Broadcast Tools 📢\n\nUse buttons below to explore my features~",
         reply_markup=keyboard,
-        parse_mode="Markdown"  # अगर Markdown चाहिए तो ये रहने दें, नहीं तो हटा दें
+        parse_mode="Markdown"
     )
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -149,7 +139,7 @@ async def start_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("➕ Add me in your Group", url=f"https://t.me/{context.bot.username}?startgroup=true")],
-            [InlineKeyboardButton("❓ Help and commands", callback_data="help_menu")],
+            [InlineKeyboardButton("❓ Help and Commands", callback_data="help_menu")],
             [
                 InlineKeyboardButton("👤 Owner", url="https://t.me/Itz_Marv1n"),
                 InlineKeyboardButton("💬 Support", url="https://t.me/Anime_Group_chat_en")
@@ -160,16 +150,7 @@ async def start_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_media(
             media=InputMediaPhoto(
                 media=START_IMAGE_URL,
-                caption="""
-🌸 Hᴀɪɪ~ I'ᴍ Eᴍɪᴋᴏ! 🌸  
-
-I'ᴍ ʜᴇʀᴇ ᴛᴏ ᴋᴇᴇᴘ ʏᴏᴜʀ ɢʀᴏᴜᴘ ɴᴇᴀᴛ & ғᴜɴ! (≧▽≦)  
-╰☆✿  I ᴅᴇʟᴇᴛᴇ ᴇᴅɪᴛᴇᴅ ᴍᴇssᴀɢᴇs~ ✨  
-╰☆✿  Lᴇᴛ ᴇᴠᴇʀʏᴏɴᴇ ᴋɴᴏᴡ ᴡʜᴇɴ ʏᴏᴜ'ʀᴇ Aғᴋ~ ⏰  
-╰☆✿  Bʀᴏᴀᴅᴄᴀsᴛ ᴍᴇssᴀɢᴇs ᴇᴀsɪʟʏ~ 📢  
-
-Uѕᴇ ᴛʜᴇ ʙᴜᴛᴛᴏɴs ʙᴇʟᴏᴡ ᴛᴏ ᴇxᴘʟᴏʀᴇ ᴍᴇ~! (✿◕‿◕)♡
-        """,
+                caption="🌸 **Welcome to Emiko Edit!** 🌸\n\nI'm your cute anime-style assistant to manage groups!\n★ Edit Message Cleaner ✨\n★ AFK System ⏰\n★ Broadcast Tools 📢\n\nUse buttons below to explore my features~",
                 parse_mode="Markdown"
             ),
             reply_markup=keyboard
