@@ -10,21 +10,49 @@ from telegram.ext import (
 from datetime import datetime
 import os
 import pymongo
+import re
 
 # MongoDB Setup
 MONGODB_URI = os.environ.get("MONGODB_URI")
 LOGGER_GROUP = int(os.environ.get("LOGGER_GROUP"))
 START_IMAGE_URL = os.environ.get("START_IMAGE_URL")
+ADMIN_ID = int(os.environ.get("ADMIN_ID"))
 
 client = pymongo.MongoClient(MONGODB_URI)
 db = client["EmikoBotDB"]
 afk_collection = db["afk"]
 chats_collection = db["chats"]
+sudoers_collection = db["sudoers"]
+blocked_collection = db["blocked"]
+
+# ==================== HELPER FUNCTIONS ====================
+
+def is_owner(user_id: int) -> bool:
+    return user_id == ADMIN_ID
+
+def is_sudo(user_id: int) -> bool:
+    return sudoers_collection.find_one({"user_id": user_id}) is not None
+
+async def get_stats():
+    total_groups = chats_collection.count_documents({"type": "group"})
+    total_users = chats_collection.count_documents({"type": "private"})
+    blocked_users = blocked_collection.count_documents({})
+    sudoers_count = sudoers_collection.count_documents({})
+    return total_groups, total_users, blocked_users, sudoers_count
 
 # ==================== CORE FUNCTIONS ====================
 
+def format_duration(seconds: int) -> str:
+    periods = [('day', 86400), ('hour', 3600), ('minute', 60)]
+    parts = []
+    for period_name, period_seconds in periods:
+        if seconds >= period_seconds:
+            period_value, seconds = divmod(seconds, period_seconds)
+            parts.append(f"{int(period_value)} {period_name}{'s' if period_value > 1 else ''}")
+    return " ".join(parts) if parts else "few seconds"
+
 async def delete_edited(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.edited_message.chat.type in ["group", "supergroup"]:
+    if update.edited_message and update.edited_message.chat.type in ["group", "supergroup"]:
         try:
             user = update.edited_message.from_user
             await update.edited_message.delete()
@@ -41,10 +69,14 @@ async def log_event(event_type: str, update: Update, context: ContextTypes.DEFAU
         user = update.effective_user
         chat = update.effective_chat
         
+        username = f"@{user.username}" if user.username else "None"
+        group_username = f"@{chat.username}" if chat.username else "None"
+        group_title = chat.title if chat.title else "None"
+
         if event_type == "private_start":
             log_text = f"""
 🌸 **New User Started Bot** 🌸
-┌ 👤 User: [{user.first_name}](tg://user?id={user.id})
+┌ 👤 User: [{user.first_name}](tg://user?id={user.id}) ({username})
 ├ 🆔 ID: `{user.id}`
 └ 📅 Date: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
             """
@@ -52,9 +84,18 @@ async def log_event(event_type: str, update: Update, context: ContextTypes.DEFAU
         elif event_type == "group_add":
             log_text = f"""
 👥 **Bot Added to Group** 👥
-┌ 📛 Group: {chat.title}
+┌ 📛 Group: {group_title} ({group_username})
 ├ 🆔 ID: `{chat.id}`
-├ 👤 Added By: [{user.first_name}](tg://user?id={user.id})
+├ 👤 Added By: [{user.first_name}](tg://user?id={user.id}) ({username})
+└ 📅 Date: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+            """
+
+        elif event_type == "group_remove":
+            log_text = f"""
+🗑️ **Bot Removed from Group** 🗑️
+┌ 📛 Group: {group_title} ({group_username})
+├ 🆔 ID: `{chat.id}`
+├ 👤 Removed By: [{user.first_name}](tg://user?id={user.id}) ({username})
 └ 📅 Date: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
             """
 
@@ -101,6 +142,96 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not (is_owner(update.effective_user.id) or is_sudo(update.effective_user.id)):
+        await update.message.reply_text("🚫 You don't have permission!", parse_mode="Markdown")
+        return
+    
+    groups, users, blocked, sudoers = await get_stats()
+    bot_name = f"[Emiko Bot](https://t.me/{context.bot.username})"
+    stats_text = f"""
+**{bot_name} sᴛᴀᴛs ᴀɴᴅ ɪɴғᴏʀᴍᴀᴛɪᴏɴ :**
+**ʙʟᴏᴄᴋᴇᴅ :** `{blocked}`
+**ᴄʜᴀᴛs :** `{groups}`
+**ᴜsᴇʀs :** `{users}`
+**sᴜᴅᴏᴇʀs :** `{sudoers}`
+    """
+    await update.message.reply_text(stats_text.strip(), parse_mode="Markdown")
+
+async def add_sudo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_owner(update.effective_user.id):
+        await update.message.reply_text("🚫 Owner-only command!", parse_mode="Markdown")
+        return
+    
+    target_user = None
+    if update.message.reply_to_message:
+        target_user = update.message.reply_to_message.from_user
+    elif context.args:
+        try:
+            user_input = context.args[0]
+            if user_input.startswith("@"):
+                user = await context.bot.get_chat(user_input)
+                target_user = user
+            else:
+                target_user = await context.bot.get_chat(int(user_input))
+        except Exception as e:
+            print(f"Sudo Error: {e}")
+    
+    if not target_user:
+        await update.message.reply_text("Reply to user or provide username/ID!", parse_mode="Markdown")
+        return
+    
+    sudoers_collection.update_one(
+        {"user_id": target_user.id},
+        {"$set": {"user_id": target_user.id, "username": target_user.username}},
+        upsert=True
+    )
+    await update.message.reply_text(f"✅ Added {target_user.first_name} to sudoers!", parse_mode="Markdown")
+
+async def remove_sudo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_owner(update.effective_user.id):
+        await update.message.reply_text("🚫 Owner-only command!", parse_mode="Markdown")
+        return
+    
+    target_user = None
+    if update.message.reply_to_message:
+        target_user = update.message.reply_to_message.from_user
+    elif context.args:
+        try:
+            user_input = context.args[0]
+            if user_input.startswith("@"):
+                user = await context.bot.get_chat(user_input)
+                target_user = user
+            else:
+                target_user = await context.bot.get_chat(int(user_input))
+        except Exception as e:
+            print(f"Sudo Error: {e}")
+    
+    if not target_user:
+        await update.message.reply_text("Reply to user or provide username/ID!", parse_mode="Markdown")
+        return
+    
+    sudoers_collection.delete_one({"user_id": target_user.id})
+    await update.message.reply_text(f"❌ Removed {target_user.first_name} from sudoers!", parse_mode="Markdown")
+
+async def sudo_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not (is_owner(update.effective_user.id) or is_sudo(update.effective_user.id)):
+        await update.message.reply_text("🚫 You don't have permission!", parse_mode="Markdown")
+        return
+    
+    sudoers = list(sudoers_collection.find({}))
+    if not sudoers:
+        await update.message.reply_text("No sudo users found!", parse_mode="Markdown")
+        return
+    
+    sudo_list = []
+    for user in sudoers:
+        username = f"@{user['username']}" if user.get("username") else "No Username"
+        sudo_list.append(f"• {username} (`{user['user_id']}`)")
+    
+    list_text = "**Sudo Users List:**\n" + "\n".join(sudo_list)
+    await update.message.reply_text(list_text, parse_mode="Markdown")
+
 async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -108,15 +239,15 @@ async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = """
 🎀 *Emiko Edit Help Menu* 🎀
 
-✨ *Features:*
-• `/afk` - Set AFK status
-• `/broadcast` - Send message to all users (Admin)
-• Auto-deletes edited messages
+✨ *Admin Commands:*
+• `/stats` - Bot statistics
+• `/addsudo` - Add sudo user
+• `/rmsudo` - Remove sudo user
+• `/sudolist` - List sudo users
 
-⚙️ *How to Use:*
-1. Add me to your group
-2. Make me admin
-3. I'll auto-delete edited messages!
+✨ *User Commands:*
+• `/afk [time] [reason]` - Set AFK status
+• `/broadcast` - Broadcast messages (Admin)
 
 🌸 Made with love by [Samurais Network](https://t.me/Samurais_network)
     """
@@ -132,108 +263,42 @@ async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         print(f"Help Error: {e}")
 
-async def start_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    try:
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("➕ Add me in your Group", url=f"https://t.me/{context.bot.username}?startgroup=true")],
-            [InlineKeyboardButton("❓ Help and Commands", callback_data="help_menu")],
-            [
-                InlineKeyboardButton("👤 Owner", url="https://t.me/Itz_Marv1n"),
-                InlineKeyboardButton("💬 Support", url="https://t.me/Anime_Group_chat_en")
-            ],
-            [InlineKeyboardButton("📢 Channel", url="https://t.me/Samurais_network")]
-        ])
-        
-        await query.edit_message_media(
-            media=InputMediaPhoto(
-                media=START_IMAGE_URL,
-                caption="🌸 **Hii~ I'ᴍ Emiko!** 🌸\n\nI'm here to keep your group clean & fun! (≧▽≦)\n╰☆✿ **Auto-delete edited messages** ✨\n╰☆✿ **AFK system to let others know when you're away** ⏰\n╰☆✿ **Easy message broadcasting** 📢\n\nUse the buttons below to explore my features! (✿◕‿◕)♡",
-                parse_mode="Markdown"
-            ),
-            reply_markup=keyboard
-        )
-    except Exception as e:
-        print(f"Back Button Error: {e}")
+# ==================== BROADCAST SYSTEM ====================
 
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    if user.id != int(os.environ.get("ADMIN_ID")):
+    if not (is_owner(user.id) or is_sudo(user.id)):
         await update.message.reply_text("❌ You're not authorized!", parse_mode="Markdown")
         return
     
-    if not context.args:
-        await update.message.reply_text("Usage: `/broadcast Your message here`", parse_mode="Markdown")
+    reply_msg = update.message.reply_to_message
+    if not reply_msg:
+        await update.message.reply_text("Reply to a message to broadcast!", parse_mode="Markdown")
         return
     
-    message = " ".join(context.args)
     all_chats = chats_collection.find()
-    
-    user_count = 0
-    group_count = 0
-    failed = 0
+    success = failed = 0
     
     for chat in all_chats:
         try:
-            await context.bot.send_message(chat["chat_id"], message, parse_mode="Markdown")
-            if chat["type"] == "private":
-                user_count += 1
+            if reply_msg.forward_from_chat or reply_msg.forward_from:
+                await reply_msg.forward(chat_id=chat["chat_id"])
             else:
-                group_count += 1
+                await reply_msg.copy(chat_id=chat["chat_id"])
+            success += 1
         except Exception as e:
             print(f"Broadcast Error: {e}")
-            failed += 1
+            failed +=1
+            blocked_collection.update_one(
+                {"chat_id": chat["chat_id"]},
+                {"$set": {"chat_id": chat["chat_id"]}},
+                upsert=True
+            )
     
     await update.message.reply_text(
-        f"✅ **Broadcast Report:**\n👤 Users: {user_count}\n👥 Groups: {group_count}\n❌ Failed: {failed}",
+        f"✅ **Broadcast Report:**\n✔️ Success: {success}\n❌ Failed: {failed}",
         parse_mode="Markdown"
     )
-
-# ==================== AFK SYSTEM ====================
-
-async def set_afk(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.chat.type in ["group", "supergroup"]:
-        user = update.effective_user
-        now = datetime.now()
-        afk_collection.update_one(
-            {"user_id": user.id},
-            {"$set": {"afk": True, "time": now}},
-            upsert=True
-        )
-        await update.message.reply_text(f"🌙 Nyaa~ {user.first_name} is AFK! (｡•́︿•̀｡) Hurry back~💕", parse_mode="Markdown")
-
-async def handle_afk_return(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.chat.type in ["group", "supergroup"]:
-        user = update.effective_user
-        afk_data = afk_collection.find_one({"user_id": user.id})
-        if afk_data:
-            afk_time = afk_data["time"]
-            now = datetime.now()
-            delta = now - afk_time
-            seconds = delta.total_seconds()
-            afk_collection.delete_one({"user_id": user.id})
-            await update.message.reply_text(
-                f"🎉 Yay~ {user.first_name} is back! (≧ω≦)✨\n⏱️ Gone for {int(seconds)}s ~",
-                parse_mode="Markdown"
-            )
-
-async def afk_mention(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.chat.type in ["group", "supergroup"] and update.message.entities:
-        for entity in update.message.entities:
-            if entity.type in ["mention", "text_mention"]:
-                mentioned_user = entity.user
-                afk_data = afk_collection.find_one({"user_id": mentioned_user.id})
-                if afk_data:
-                    afk_time = afk_data["time"]
-                    now = datetime.now()
-                    delta = now - afk_time
-                    seconds = delta.total_seconds()
-                    await update.message.reply_text(
-                        f"⚠️ **{mentioned_user.first_name} ɪs ᴀғᴋ!**\n⏰ ᴀᴡᴀʏ sɪɴᴄᴇ `{int(seconds)}s`",
-                        parse_mode="Markdown"
-                    )
 
 # ==================== MAIN ====================
 
@@ -242,6 +307,10 @@ def main():
     
     # Handlers
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("stats", stats))
+    app.add_handler(CommandHandler("addsudo", add_sudo))
+    app.add_handler(CommandHandler("rmsudo", remove_sudo))
+    app.add_handler(CommandHandler("sudolist", sudo_list))
     app.add_handler(CommandHandler("afk", set_afk))
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CallbackQueryHandler(help_button, pattern="^help_menu$"))
