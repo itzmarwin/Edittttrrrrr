@@ -303,7 +303,9 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     all_chats = chats_collection.find()
-    success = failed = 0
+    groups = 0
+    users = 0
+    failed = 0
     
     for chat in all_chats:
         try:
@@ -311,7 +313,12 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await reply_msg.forward(chat_id=chat["chat_id"])
             else:
                 await reply_msg.copy(chat_id=chat["chat_id"])
-            success += 1
+            
+            # ग्रुप/यूजर काउंटिंग
+            if chat["type"] == "group":
+                groups +=1
+            else:
+                users +=1
         except Exception as e:
             print(f"Broadcast Error: {e}")
             failed +=1
@@ -321,8 +328,9 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 upsert=True
             )
     
+    # नया रिपोर्ट फॉर्मेट
     await update.message.reply_text(
-        f"✅ **Broadcast Report:**\n✔️ Success: {success}\n❌ Failed: {failed}",
+        f"✅ **Broadcast Report:**\n👥 Groups: `{groups}`\n👤 Users: `{users}`\n❌ Failed: `{failed}`",
         parse_mode="Markdown"
     )
 
@@ -352,12 +360,11 @@ async def set_afk(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             reason = ' '.join(args)
     
-    formatted_duration = format_duration(duration) if duration > 0 else "Not specified"
     afk_data = {
         "user_id": user.id,
         "reason": reason,
         "duration": duration,
-        "formatted_time": formatted_duration,
+        "formatted_time": format_duration(duration) if duration > 0 else "",
         "timestamp": datetime.now()
     }
     
@@ -367,10 +374,9 @@ async def set_afk(update: Update, context: ContextTypes.DEFAULT_TYPE):
         upsert=True
     )
     
+    # सिर्फ बेसिक AFK मैसेज
     await update.message.reply_text(
-        f"🌙 Nyaa~ {user.first_name} is AFK!\n"
-        f"⏰ Duration: {formatted_duration}\n"
-        f"📝 Reason: {reason or 'Not specified'}",
+        f"🌙 Nyaa~ {user.first_name} is AFK!",
         parse_mode="Markdown"
     )
 
@@ -409,7 +415,8 @@ async def afk_mention(update: Update, context: ContextTypes.DEFAULT_TYPE):
         afk_data = afk_collection.find_one({"user_id": user.id})
         if afk_data:
             msg = f"⚠️ **{user.first_name} ɪs ᴀғᴋ!**\n"
-            msg += f"⏰ Duration: {afk_data['formatted_time']}\n"
+            if afk_data['formatted_time']:
+                msg += f"⏰ Duration: {afk_data['formatted_time']}\n"
             if afk_data['reason']:
                 msg += f"📝 Reason: {afk_data['reason']}"
             await update.message.reply_text(msg, parse_mode="Markdown")
