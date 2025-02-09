@@ -239,15 +239,15 @@ async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = """
 🎀 *Emiko Edit Help Menu* 🎀
 
-✨ *Admin Commands:*
-• `/stats` - Bot statistics
-• `/addsudo` - Add sudo user
-• `/rmsudo` - Remove sudo user
-• `/sudolist` - List sudo users
+✨ *Features:*
+• /Afk - Set Afk Status 
+• /broadcast - Send message to all users (Admin)
+• Auto-deletes edited messages
 
-✨ *User Commands:*
-• `/afk [time] [reason]` - Set AFK status
-• `/broadcast` - Broadcast messages (Admin)
+✨ *How to use:*
+1. Add me to your group
+2. Make me Admin
+3. I'll auto-delete edited messages!
 
 🌸 Made with love by [Samurais Network](https://t.me/Samurais_network)
     """
