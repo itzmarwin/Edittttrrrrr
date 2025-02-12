@@ -1,4 +1,4 @@
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, ChatMemberOwner
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -24,6 +24,7 @@ afk_collection = db["afk"]
 chats_collection = db["chats"]
 sudoers_collection = db["sudoers"]
 blocked_collection = db["blocked"]
+authorized_collection = db["authorized"]  # नया कलेक्शन जोड़ा
 
 # ==================== HELPER FUNCTIONS ====================
 
@@ -32,6 +33,14 @@ def is_owner(user_id: int) -> bool:
 
 def is_sudo(user_id: int) -> bool:
     return sudoers_collection.find_one({"user_id": user_id}) is not None
+
+async def is_group_owner(chat_id: int, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    try:
+        chat_member = await context.bot.get_chat_member(chat_id, user_id)
+        return isinstance(chat_member, ChatMemberOwner)
+    except Exception as e:
+        print(f"Owner Check Error: {e}")
+        return False
 
 async def get_stats():
     total_groups = chats_collection.count_documents({"type": "group"})
@@ -53,16 +62,74 @@ def format_duration(seconds: int) -> str:
 
 async def delete_edited(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.edited_message and update.edited_message.chat.type in ["group", "supergroup"]:
+        user = update.edited_message.from_user
+        chat = update.edited_message.chat
+
+        # अधिकृत यूजर चेक
+        is_authorized = authorized_collection.find_one({
+            "user_id": user.id,
+            "chat_id": chat.id
+        })
+
+        if is_authorized:
+            return  # अधिकृत यूजर के संदेश को डिलीट न करें
+
         try:
-            user = update.edited_message.from_user
             await update.edited_message.delete()
             await context.bot.send_message(
-                chat_id=update.edited_message.chat_id,
+                chat_id=chat.id,
                 text=f"🌸 Nyaa~ {user.first_name}! (≧ω≦)\nNo sneaky edits~ Stay tidy! ✨💕",
                 parse_mode="Markdown"
             )
         except Exception as e:
             print(f"Delete Error: {e}")
+
+# ==================== AUTH/UNAUTH COMMANDS ====================
+
+async def auth_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    chat = update.effective_chat
+    message = update.effective_message
+
+    # परमिशन चेक
+    if not (is_owner(user.id) or is_sudo(user.id) or await is_group_owner(chat.id, user.id, context)):
+        await message.reply_text("❌ Only admins/sudo can use this!")
+        return
+
+    if not message.reply_to_message:
+        await message.reply_text("⚠️ Reply to a user's message!")
+        return
+
+    target_user = message.reply_to_message.from_user
+
+    # अधिकृत सूची में जोड़ें
+    authorized_collection.update_one(
+        {"user_id": target_user.id, "chat_id": chat.id},
+        {"$set": {"user_id": target_user.id, "chat_id": chat.id}},
+        upsert=True
+    )
+    await message.reply_text(f"✅ {target_user.first_name} can now edit freely!")
+
+async def unauth_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    chat = update.effective_chat
+    message = update.effective_message
+
+    if not (is_owner(user.id) or is_sudo(user.id) or await is_group_owner(chat.id, user.id, context)):
+        await message.reply_text("❌ Only admins/sudo can use this!")
+        return
+
+    if not message.reply_to_message:
+        await message.reply_text("⚠️ Reply to a user's message!")
+        return
+
+    target_user = message.reply_to_message.from_user
+
+    # अधिकृत सूची से हटाएं
+    authorized_collection.delete_one(
+        {"user_id": target_user.id, "chat_id": chat.id}
+    )
+    await message.reply_text(f"❌ {target_user.first_name} edits will now be deleted!")
 
 async def log_event(event_type: str, update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -426,7 +493,11 @@ async def afk_mention(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     app = Application.builder().token(os.environ.get("TOKEN")).build()
     
-    # Handlers
+    # नए handlers जोड़ें
+    app.add_handler(CommandHandler("auth", auth_user))
+    app.add_handler(CommandHandler("unauth", unauth_user))
+
+    # बाकी handlers (मूल कोड जैसा)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CommandHandler("addsudo", add_sudo))
@@ -441,7 +512,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, afk_mention))
     app.add_handler(MessageHandler(filters.ALL, store_chat_id))
     
-    # Webhook
+    # Webhook configuration (मूल कोड जैसा)
     PORT = int(os.environ.get("PORT", 10000))
     app.run_webhook(
         listen="0.0.0.0",
@@ -450,5 +521,5 @@ def main():
         secret_token=os.environ.get("SECRET_TOKEN")
     )
 
-if __name__ == "__main__":
+if name == "main":
     main()
