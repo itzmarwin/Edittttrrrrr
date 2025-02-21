@@ -10,7 +10,8 @@ from telegram.ext import (
 from datetime import datetime
 import os
 import pymongo
-import re
+# 🚫 AFK के लिए 're' मॉड्यूल की जरूरत नहीं
+#import re  # ❌ इसे हटा दें
 
 # MongoDB Setup
 MONGODB_URI = os.environ.get("MONGODB_URI")
@@ -20,7 +21,8 @@ ADMIN_ID = int(os.environ.get("ADMIN_ID"))
 
 client = pymongo.MongoClient(MONGODB_URI)
 db = client["EmikoBotDB"]
-afk_collection = db["afk"]
+# 🚫 AFK कलेक्शन को हटा दें
+#afk_collection = db["afk"]  # ❌ यह लाइन डिलीट करें
 chats_collection = db["chats"]
 sudoers_collection = db["sudoers"]
 blocked_collection = db["blocked"]
@@ -48,15 +50,6 @@ async def get_stats():
     blocked_users = blocked_collection.count_documents({})
     sudoers_count = sudoers_collection.count_documents({})
     return total_groups, total_users, blocked_users, sudoers_count
-
-def format_duration(seconds: int) -> str:
-    periods = [('day', 86400), ('hour', 3600), ('minute', 60)]
-    parts = []
-    for period_name, period_seconds in periods:
-        if seconds >= period_seconds:
-            period_value, seconds = divmod(seconds, period_seconds)
-            parts.append(f"{int(period_value)} {period_name}{'s' if period_value > 1 else ''}")
-    return " ".join(parts) if parts else "few seconds"
 
 # ==================== CORE FUNCTIONS ====================
 
@@ -156,7 +149,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_photo(
         chat_id=update.effective_chat.id,
         photo=START_IMAGE_URL,
-        caption="🌸 **Hii~ I'ᴍ Emiko!** 🌸\n\nI'm here to keep your group clean & fun! (≧▽≦)\n╰☆✿ **Auto-delete edited messages** ✨\n╰☆✿ **AFK system to let others know when you're away** ⏰\n╰☆✿ **Easy message broadcasting** 📢\n\nUse the buttons below to explore my features! (✿◕‿◕)♡",
+        caption="🌸 **Hii~ I'ᴍ Emiko!** 🌸\n\nI'm here to keep your group clean & fun! (≧▽≦)\n╰☆✿ **Auto-delete edited messages** ✨\n╰☆✿ **Easy message broadcasting** 📢\n\nUse the buttons below to explore my features! (✿◕‿◕)♡",  # 🚫 AFK वाला भाग हटाया
         reply_markup=keyboard,
         parse_mode="Markdown"
     )
@@ -259,7 +252,6 @@ async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🎀 *Emiko Edit Help Menu* 🎀
 
 ✨ *Features:*
-• /Afk - Set Afk Status 
 • /broadcast - Send message to all users (Admin)
 • Auto-deletes edited messages
 
@@ -269,7 +261,7 @@ async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 3. I'll auto-delete edited messages!
 
 🌸 Made with love by [Samurais Network](https://t.me/Samurais_network)
-    """
+    """  # 🚫 AFK कमांड हटाया
     
     try:
         await query.edit_message_caption(
@@ -300,7 +292,7 @@ async def start_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_media(
             media=InputMediaPhoto(
                 media=START_IMAGE_URL,
-                caption="🌸 **Hii~ I'ᴍ Emiko!** 🌸\n\nI'm here to keep your group clean & fun! (≧▽≦)\n╰☆✿ **Auto-delete edited messages** ✨\n╰☆✿ **AFK system to let others know when you're away** ⏰\n╰☆✿ **Easy message broadcasting** 📢\n\nUse the buttons below to explore my features! (✿◕‿◕)♡",
+                caption="🌸 **Hii~ I'ᴍ Emiko!** 🌸\n\nI'm here to keep your group clean & fun! (≧▽≦)\n╰☆✿ **Auto-delete edited messages** ✨\n╰☆✿ **Easy message broadcasting** 📢\n\nUse the buttons below to explore my features! (✿◕‿◕)♡",  # 🚫 AFK वाला भाग हटाया
                 parse_mode="Markdown"
             ),
             reply_markup=keyboard
@@ -350,91 +342,6 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"✅ **Broadcast Report:**\n👥 Groups: `{groups}`\n👤 Users: `{users}`\n❌ Failed: `{failed}`",
         parse_mode="Markdown"
     )
-
-# ==================== AFK SYSTEM ====================
-
-async def set_afk(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.chat.type not in ["group", "supergroup"]:
-        return
-
-    user = update.effective_user
-    args = context.args
-    duration = 0
-    reason = ""
-    
-    if args:
-        time_pattern = re.compile(r'(\d+d)?(\d+h)?(\d+m)?')
-        time_match = time_pattern.match(''.join(args))
-        
-        if time_match:
-            days = int(time_match.group(1)[:-1]) if time_match.group(1) else 0
-            hours = int(time_match.group(2)[:-1]) if time_match.group(2) else 0
-            minutes = int(time_match.group(3)[:-1]) if time_match.group(3) else 0
-            
-            duration = (days * 86400) + (hours * 3600) + (minutes * 60)
-            reason = ' '.join(args[len(time_match.groups()):])
-        else:
-            reason = ' '.join(args)
-    
-    afk_data = {
-        "user_id": user.id,
-        "reason": reason,
-        "duration": duration,
-        "formatted_time": format_duration(duration) if duration > 0 else "",
-        "timestamp": datetime.now()
-    }
-    
-    afk_collection.update_one(
-        {"user_id": user.id},
-        {"$set": afk_data},
-        upsert=True
-    )
-    
-    await update.message.reply_text(
-        f"🌙 Nyaa~ {user.first_name} is AFK!",
-        parse_mode="Markdown"
-    )
-
-async def handle_afk_return(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.chat.type not in ["group", "supergroup"]:
-        return
-
-    user = update.effective_user
-    afk_data = afk_collection.find_one({"user_id": user.id})
-    
-    if afk_data:
-        afk_collection.delete_one({"user_id": user.id})
-        duration = format_duration(int((datetime.now() - afk_data["timestamp"]).total_seconds()))
-        await update.message.reply_text(
-            f"🎉 Yay~ {user.first_name} is back!\n"
-            f"⏱️ Gone for: {duration}",
-            parse_mode="Markdown"
-        )
-
-async def afk_mention(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.chat.type not in ["group", "supergroup"]:
-        return
-
-    mentioned_users = []
-    if update.message.entities:
-        for entity in update.message.entities:
-            if entity.type == "mention":
-                username = update.message.text[entity.offset:entity.offset+entity.length].lstrip('@')
-                user = next((u for u in update.message.parse_entities([entity]) if u.user.username == username), None)
-                if user:
-                    mentioned_users.append(user.user)
-            elif entity.type == "text_mention":
-                mentioned_users.append(entity.user)
-    
-    for user in mentioned_users:
-        afk_data = afk_collection.find_one({"user_id": user.id})
-        if afk_data:
-            msg = f"⚠️ **{user.first_name} ɪs ᴀғᴋ!**\n"
-            if afk_data['formatted_time']:
-                msg += f"⏰ Duration: {afk_data['formatted_time']}\n"
-            if afk_data['reason']:
-                msg += f"📝 Reason: {afk_data['reason']}"
-            await update.message.reply_text(msg, parse_mode="Markdown")
 
 # ==================== AUTH/UNAUTH COMMANDS ====================
 
@@ -492,13 +399,12 @@ def main():
     app.add_handler(CommandHandler("addsudo", add_sudo))
     app.add_handler(CommandHandler("rmsudo", remove_sudo))
     app.add_handler(CommandHandler("sudolist", sudo_list))
-    app.add_handler(CommandHandler("afk", set_afk))
+    # 🚫 AFK कमांड हटाया
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CallbackQueryHandler(help_button, pattern="^help_menu$"))
     app.add_handler(CallbackQueryHandler(start_menu, pattern="^start_menu$"))
     app.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE & filters.ChatType.GROUPS, delete_edited))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, handle_afk_return))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, afk_mention))
+    # 🚫 AFK हैंडलर्स हटाए गए
     app.add_handler(MessageHandler(filters.ALL, store_chat_id))
     
     PORT = int(os.environ.get("PORT", 10000))
