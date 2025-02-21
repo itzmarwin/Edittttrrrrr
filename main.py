@@ -10,8 +10,6 @@ from telegram.ext import (
 from datetime import datetime
 import os
 import pymongo
-# 🚫 AFK के लिए 're' मॉड्यूल की जरूरत नहीं
-#import re  # ❌ इसे हटा दें
 
 # MongoDB Setup
 MONGODB_URI = os.environ.get("MONGODB_URI")
@@ -21,8 +19,6 @@ ADMIN_ID = int(os.environ.get("ADMIN_ID"))
 
 client = pymongo.MongoClient(MONGODB_URI)
 db = client["EmikoBotDB"]
-# 🚫 AFK कलेक्शन को हटा दें
-#afk_collection = db["afk"]  # ❌ यह लाइन डिलीट करें
 chats_collection = db["chats"]
 sudoers_collection = db["sudoers"]
 blocked_collection = db["blocked"]
@@ -54,27 +50,36 @@ async def get_stats():
 # ==================== CORE FUNCTIONS ====================
 
 async def delete_edited(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.edited_message and update.edited_message.chat.type in ["group", "supergroup"]:
-        user = update.edited_message.from_user
-        chat = update.edited_message.chat
+    edited_message = update.edited_message
+    if not edited_message:
+        return
+    
+    # सिर्फ टेक्स्ट/कैप्शन एडिट्स को चेक करें ✅
+    has_text = edited_message.text or (edited_message.caption and len(edited_message.caption) > 0)
+    if not has_text:
+        return  # रिएक्शन/मीडिया बदलावों को इग्नोर करें
+    
+    user = edited_message.from_user
+    chat = edited_message.chat
 
-        is_authorized = authorized_collection.find_one({
-            "user_id": user.id,
-            "chat_id": chat.id
-        })
+    # अथॉराइज्ड यूजर्स को चेक करें
+    is_authorized = authorized_collection.find_one({
+        "user_id": user.id,
+        "chat_id": chat.id
+    })
+    if is_authorized:
+        return
 
-        if is_authorized:
-            return
-
-        try:
-            await update.edited_message.delete()
-            await context.bot.send_message(
-                chat_id=chat.id,
-                text=f"🌸 Nyaa~ {user.first_name}! (≧ω≦)\nNo sneaky edits~ Stay tidy! ✨💕",
-                parse_mode="Markdown"
-            )
-        except Exception as e:
-            print(f"Delete Error: {e}")
+    # मैसेज डिलीट करें
+    try:
+        await edited_message.delete()
+        await context.bot.send_message(
+            chat_id=chat.id,
+            text=f"🌸 Nyaa~ {user.first_name}! (≧ω≦)\nNo sneaky edits~ Stay tidy! ✨💕",
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        print(f"Delete Error: {e}")
 
 async def log_event(event_type: str, update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -149,7 +154,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_photo(
         chat_id=update.effective_chat.id,
         photo=START_IMAGE_URL,
-        caption="🌸 **Hii~ I'ᴍ Emiko!** 🌸\n\nI'm here to keep your group clean & fun! (≧▽≦)\n╰☆✿ **Auto-delete edited messages** ✨\n╰☆✿ **Easy message broadcasting** 📢\n\nUse the buttons below to explore my features! (✿◕‿◕)♡",  # 🚫 AFK वाला भाग हटाया
+        caption="🌸 **Hii~ I'ᴍ Emiko!** 🌸\n\nI'm here to keep your group clean & fun! (≧▽≦)\n╰☆✿ **Auto-delete edited messages** ✨\n╰☆✿ **Easy message broadcasting** 📢\n\nUse the buttons below to explore my features! (✿◕‿◕)♡",
         reply_markup=keyboard,
         parse_mode="Markdown"
     )
@@ -261,7 +266,7 @@ async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 3. I'll auto-delete edited messages!
 
 🌸 Made with love by [Samurais Network](https://t.me/Samurais_network)
-    """  # 🚫 AFK कमांड हटाया
+    """
     
     try:
         await query.edit_message_caption(
@@ -292,7 +297,7 @@ async def start_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_media(
             media=InputMediaPhoto(
                 media=START_IMAGE_URL,
-                caption="🌸 **Hii~ I'ᴍ Emiko!** 🌸\n\nI'm here to keep your group clean & fun! (≧▽≦)\n╰☆✿ **Auto-delete edited messages** ✨\n╰☆✿ **Easy message broadcasting** 📢\n\nUse the buttons below to explore my features! (✿◕‿◕)♡",  # 🚫 AFK वाला भाग हटाया
+                caption="🌸 **Hii~ I'ᴍ Emiko!** 🌸\n\nI'm here to keep your group clean & fun! (≧▽≦)\n╰☆✿ **Auto-delete edited messages** ✨\n╰☆✿ **Easy message broadcasting** 📢\n\nUse the buttons below to explore my features! (✿◕‿◕)♡",
                 parse_mode="Markdown"
             ),
             reply_markup=keyboard
@@ -399,12 +404,13 @@ def main():
     app.add_handler(CommandHandler("addsudo", add_sudo))
     app.add_handler(CommandHandler("rmsudo", remove_sudo))
     app.add_handler(CommandHandler("sudolist", sudo_list))
-    # 🚫 AFK कमांड हटाया
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CallbackQueryHandler(help_button, pattern="^help_menu$"))
     app.add_handler(CallbackQueryHandler(start_menu, pattern="^start_menu$"))
-    app.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE & filters.ChatType.GROUPS, delete_edited))
-    # 🚫 AFK हैंडलर्स हटाए गए
+    app.add_handler(MessageHandler(
+        filters.UpdateType.EDITED_MESSAGE & filters.ChatType.GROUPS,
+        delete_edited
+    ))
     app.add_handler(MessageHandler(filters.ALL, store_chat_id))
     
     PORT = int(os.environ.get("PORT", 10000))
