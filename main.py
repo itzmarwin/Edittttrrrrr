@@ -1,4 +1,4 @@
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, ChatMemberOwner, ChatMemberAdministrator
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, ChatMemberOwner
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -32,27 +32,12 @@ def is_owner(user_id: int) -> bool:
 def is_sudo(user_id: int) -> bool:
     return sudoers_collection.find_one({"user_id": user_id}) is not None
 
-async def is_bot_admin(chat_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
+async def is_group_owner(chat_id: int, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
     try:
-        bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
-        return bot_member.status in ["administrator", "creator"]
+        chat_member = await context.bot.get_chat_member(chat_id, user_id)
+        return isinstance(chat_member, ChatMemberOwner)
     except Exception as e:
-        print(f"Bot Admin Check Error: {e}")
-        return False
-
-async def is_group_admin(chat_id: int, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    if not await is_bot_admin(chat_id, context):
-        return False
-    
-    try:
-        user_member = await context.bot.get_chat_member(chat_id, user_id)
-        if isinstance(user_member, ChatMemberOwner):
-            return True
-        elif isinstance(user_member, ChatMemberAdministrator):
-            return user_member.can_restrict_members
-        return False
-    except Exception as e:
-        print(f"Admin Check Error: {e}")
+        print(f"Owner Check Error: {e}")
         return False
 
 async def get_stats():
@@ -61,6 +46,40 @@ async def get_stats():
     blocked_users = blocked_collection.count_documents({})
     sudoers_count = sudoers_collection.count_documents({})
     return total_groups, total_users, blocked_users, sudoers_count
+
+# ==================== CORE FUNCTIONS ====================
+
+async def delete_edited(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    edited_message = update.edited_message
+    if not edited_message:
+        return
+    
+    # सिर्फ टेक्स्ट/कैप्शन एडिट्स को चेक करें ✅
+    has_text = edited_message.text or (edited_message.caption and len(edited_message.caption) > 0)
+    if not has_text:
+        return  # रिएक्शन/मीडिया बदलावों को इग्नोर करें
+    
+    user = edited_message.from_user
+    chat = edited_message.chat
+
+    # अथॉराइज्ड यूजर्स को चेक करें
+    is_authorized = authorized_collection.find_one({
+        "user_id": user.id,
+        "chat_id": chat.id
+    })
+    if is_authorized:
+        return
+
+    # मैसेज डिलीट करें
+    try:
+        await edited_message.delete()
+        await context.bot.send_message(
+            chat_id=chat.id,
+            text=f"🌸 Nyaa~ {user.first_name}! (≧ω≦)\nNo sneaky edits~ Stay tidy! ✨💕",
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        print(f"Delete Error: {e}")
 
 async def log_event(event_type: str, update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -336,13 +355,7 @@ async def auth_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     message = update.effective_message
 
-    # Check if bot is admin
-    if not await is_bot_admin(chat.id, context):
-        await message.reply_text("❌ मुझे Admin बनाओ पहले! (◕︿◕✿)")
-        return
-
-    # Check user permissions
-    if not (is_owner(user.id) or is_sudo(user.id) or await is_group_admin(chat.id, user.id, context)):
+    if not (is_owner(user.id) or is_sudo(user.id) or await is_group_owner(chat.id, user.id, context)):
         await message.reply_text("❌ Only admins/sudo can use this!")
         return
 
@@ -364,13 +377,7 @@ async def unauth_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     message = update.effective_message
 
-    # Check if bot is admin
-    if not await is_bot_admin(chat.id, context):
-        await message.reply_text("❌ मुझे Admin बनाओ पहले! (◕︿◕✿)")
-        return
-
-    # Check user permissions
-    if not (is_owner(user.id) or is_sudo(user.id) or await is_group_admin(chat.id, user.id, context)):
+    if not (is_owner(user.id) or is_sudo(user.id) or await is_group_owner(chat.id, user.id, context)):
         await message.reply_text("❌ Only admins/sudo can use this!")
         return
 
@@ -390,7 +397,6 @@ async def unauth_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     app = Application.builder().token(os.environ.get("TOKEN")).build()
     
-    # Commands
     app.add_handler(CommandHandler("auth", auth_user))
     app.add_handler(CommandHandler("unauth", unauth_user))
     app.add_handler(CommandHandler("start", start))
@@ -399,19 +405,14 @@ def main():
     app.add_handler(CommandHandler("rmsudo", remove_sudo))
     app.add_handler(CommandHandler("sudolist", sudo_list))
     app.add_handler(CommandHandler("broadcast", broadcast))
-    
-    # Callbacks
     app.add_handler(CallbackQueryHandler(help_button, pattern="^help_menu$"))
     app.add_handler(CallbackQueryHandler(start_menu, pattern="^start_menu$"))
-    
-    # Messages
     app.add_handler(MessageHandler(
         filters.UpdateType.EDITED_MESSAGE & filters.ChatType.GROUPS,
         delete_edited
     ))
     app.add_handler(MessageHandler(filters.ALL, store_chat_id))
     
-    # Webhook for Render
     PORT = int(os.environ.get("PORT", 10000))
     app.run_webhook(
         listen="0.0.0.0",
