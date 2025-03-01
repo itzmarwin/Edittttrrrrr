@@ -355,7 +355,8 @@ async def auth_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     message = update.effective_message
 
-    if not (is_owner(user.id) or is_sudo(user.id) or await is_group_owner(chat.id, user.id, context)):
+    # Allow owner, sudo, or group admins (including owner) to use the command
+    if not (is_owner(user.id) or is_sudo(user.id) or await is_group_admin(chat.id, user.id, context)):
         await message.reply_text("❌ Only admins/sudo can use this!")
         return
 
@@ -377,7 +378,8 @@ async def unauth_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     message = update.effective_message
 
-    if not (is_owner(user.id) or is_sudo(user.id) or await is_group_owner(chat.id, user.id, context)):
+    # Allow owner, sudo, or group admins (including owner) to use the command
+    if not (is_owner(user.id) or is_sudo(user.id) or await is_group_admin(chat.id, user.id, context)):
         await message.reply_text("❌ Only admins/sudo can use this!")
         return
 
