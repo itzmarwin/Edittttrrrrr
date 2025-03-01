@@ -348,49 +348,90 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-# ==================== AUTH/UNAUTH COMMANDS ====================
-
+# -------------------- AUTH/UNATH COMMANDS --------------------
 async def auth_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat = update.effective_chat
     message = update.effective_message
 
-    if not (is_owner(user.id) or is_sudo(user.id) or await is_group_owner(chat.id, user.id, context)):
-        await message.reply_text("❌ Only admins/sudo can use this!")
+    # Check bot admin status
+    if not await is_bot_admin(chat.id, context):
+        await message.reply_text("❌ I need admin privileges to work!")
         return
 
-    if not message.reply_to_message:
-        await message.reply_text("⚠️ Reply to a user's message!")
+    # Check user permissions
+    if not (is_owner(user.id) or is_sudo(user.id) or await is_group_admin(chat.id, user.id, context)):
+        await message.reply_text("🚫 You need admin rights to use this command!")
         return
 
-    target_user = message.reply_to_message.from_user
+    # Resolve target user
+    target_user = None
+    if message.reply_to_message:
+        target_user = message.reply_to_message.from_user
+    elif context.args:
+        try:
+            user_input = context.args[0].strip()
+            if user_input.startswith("@"):
+                target_user = await context.bot.get_chat(user_input)
+            else:
+                target_user = await context.bot.get_chat(int(user_input))
+        except Exception as e:
+            print(f"Auth Error: {e}")
+            await message.reply_text("⚠️ Invalid user! Use:\n/auth @username\n/auth 123456\n/reply to message")
+            return
 
+    if not target_user:
+        await message.reply_text("⚠️ Please reply to a user or provide username/ID")
+        return
+
+    # Update database
     authorized_collection.update_one(
         {"user_id": target_user.id, "chat_id": chat.id},
         {"$set": {"user_id": target_user.id, "chat_id": chat.id}},
         upsert=True
     )
-    await message.reply_text(f"✅ {target_user.first_name} can now edit freely!")
+    await message.reply_text(f"✅ Authorized {target_user.first_name}!")
 
 async def unauth_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat = update.effective_chat
     message = update.effective_message
 
-    if not (is_owner(user.id) or is_sudo(user.id) or await is_group_owner(chat.id, user.id, context)):
-        await message.reply_text("❌ Only admins/sudo can use this!")
+    # Check bot admin status
+    if not await is_bot_admin(chat.id, context):
+        await message.reply_text("❌ I need admin privileges to work!")
         return
 
-    if not message.reply_to_message:
-        await message.reply_text("⚠️ Reply to a user's message!")
+    # Check user permissions
+    if not (is_owner(user.id) or is_sudo(user.id) or await is_group_admin(chat.id, user.id, context)):
+        await message.reply_text("🚫 You need admin rights to use this command!")
         return
 
-    target_user = message.reply_to_message.from_user
+    # Resolve target user
+    target_user = None
+    if message.reply_to_message:
+        target_user = message.reply_to_message.from_user
+    elif context.args:
+        try:
+            user_input = context.args[0].strip()
+            if user_input.startswith("@"):
+                target_user = await context.bot.get_chat(user_input)
+            else:
+                target_user = await context.bot.get_chat(int(user_input))
+        except Exception as e:
+            print(f"Unauth Error: {e}")
+            await message.reply_text("⚠️ Invalid user! Use:\n/unauth @username\n/unauth 123456\n/reply to message")
+            return
 
+    if not target_user:
+        await message.reply_text("⚠️ Please reply to a user or provide username/ID")
+        return
+
+    # Update database
     authorized_collection.delete_one(
         {"user_id": target_user.id, "chat_id": chat.id}
     )
-    await message.reply_text(f"❌ {target_user.first_name} edits will now be deleted!")
+    await message.reply_text(f"❌ Removed {target_user.first_name}'s editing privileges")
 
 # ==================== MAIN ====================
 
