@@ -32,12 +32,20 @@ def is_owner(user_id: int) -> bool:
 def is_sudo(user_id: int) -> bool:
     return sudoers_collection.find_one({"user_id": user_id}) is not None
 
-async def is_group_owner(chat_id: int, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
+async def is_bot_admin(chat_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
     try:
-        chat_member = await context.bot.get_chat_member(chat_id, user_id)
-        return isinstance(chat_member, ChatMemberOwner)
+        bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
+        return bot_member.status in ["administrator", "creator"]
     except Exception as e:
-        print(f"Owner Check Error: {e}")
+        print(f"Bot Admin Check Error: {e}")
+        return False
+
+async def is_group_admin(chat_id: int, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    try:
+        user_member = await context.bot.get_chat_member(chat_id, user_id)
+        return user_member.status in ["administrator", "creator"]
+    except Exception as e:
+        print(f"Admin Check Error: {e}")
         return False
 
 async def get_stats():
